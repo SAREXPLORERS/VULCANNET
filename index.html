@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visualización SAR - Perú</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f9fafb;
+      color: #1f2937;
+    }
+
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      z-index: 1000;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    header p {
+      margin: 0;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: white;
+      color: #2563eb;
+      border: 1px solid #2563eb;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100vh;
+      border: none;
+    }
+
+    .sidebar {
+      position: fixed;
+      top: 80px;
+      left: 20px;
+      width: 360px;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+
+    .volcano {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #fafafa;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .volcano:hover {
+      background: #e5e7eb;
+    }
+
+    .volcano.active {
+      background: #dbeafe;
+      border-color: #2563eb;
+    }
+
+    .risk {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: bold;
+      color: white;
+    }
+
+    .muy-alto { background: #dc2626; }
+    .alto { background: #f97316; }
+    .moderado { background: #facc15; color: #000; }
+
+    .details {
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      text-align: center;
+      margin: 10px 0;
+    }
+
+    .summary div {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 6px;
+    }
+
+    .summary .muy-alto { background: #fee2e2; color: #b91c1c; }
+    .summary .alto { background: #ffedd5; color: #c2410c; }
+    .summary .moderado { background: #fef9c3; color: #a16207; }
+
+    .footer {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 12px;
+      border-top: 1px solid #ddd;
+      padding-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>Visualización SAR - Perú</h1>
+      <p>Sentinel-1 y ALOS PALSAR | 9 Volcanes Activos | Datos INGEMMET</p>
+    </div>
+    <div class="buttons">
+      <button id="toggleSidebar">Volcanes</button>
+      <button class="secondary" id="openGEE">Abrir en GEE</button>
+    </div>
+  </header>
+
+  <iframe id="geeMap" src="https://e-caldron-473502-i8.projects.earthengine.app/view/versin-6-proto"></iframe>
+
+  <div class="sidebar" id="sidebar">
+    <h3>Volcanes del Perú</h3>
+    <p style="font-size:12px;color:#6b7280;">Ranking de riesgo relativo - INGEMMET 2021</p>
+
+    <div class="summary">
+      <div class="muy-alto">
+        <div style="font-size:18px;font-weight:bold;">3</div>
+        <div>Muy Alto</div>
+      </div>
+      <div class="alto">
+        <div style="font-size:18px;font-weight:bold;">4</div>
+        <div>Alto</div>
+      </div>
+      <div class="moderado">
+        <div style="font-size:18px;font-weight:bold;">2</div>
+        <div>Moderado</div>
+      </div>
+    </div>
+
+    <div id="volcanoList"></div>
+
+    <div class="footer">
+      <p>Datos del Observatorio Vulcanológico del INGEMMET (OVI)</p>
+      <p>Ranking actualizado: Noviembre 2021</p>
+      <p>Metodología: Peligro volcánico + Exposición poblacional</p>
+    </div>
+  </div>
+
+  <script>
+    const volcanoes = [
+      { name: "Ubinas", lat: -16.3556, lon: -70.9036, color: "#e6194b", risk: "Muy Alto", elev: "5672 m", last: "2023 (activo)", hazards: "Flujos piroclásticos, Caída de ceniza, Lahares", pop: "~3,000 personas" },
+      { name: "Sabancaya", lat: -15.787, lon: -71.857, color: "#3cb44b", risk: "Muy Alto", elev: "5976 m", last: "2019-2022 (activo)", hazards: "Domos de lava, Explosiones, Caída de ceniza", pop: "Valle del Colca afectado" },
+      { name: "Misti", lat: -16.2991, lon: -71.4056, color: "#ffe119", risk: "Muy Alto", elev: "5822 m", last: "1985", hazards: "Flujos piroclásticos, Lahares, Caída de ceniza", pop: "~1 millón (Arequipa)" },
+      { name: "Ticsani", lat: -16.2297, lon: -70.9569, color: "#4363d8", risk: "Alto", elev: "5408 m", last: "Holoceno", hazards: "Flujos de lava, Caída de ceniza", pop: "Comunidades rurales" },
+      { name: "Huaynaputina", lat: -16.5, lon: -70.8586, color: "#f58231", risk: "Alto", elev: "4850 m", last: "1600", hazards: "Flujos piroclásticos, Lahares, Caída de ceniza", pop: "Zona rural de Moquegua" },
+      { name: "Coropuna", lat: -15.5462, lon: -72.6606, color: "#911eb4", risk: "Alto", elev: "6377 m", last: "Holoceno", hazards: "Lahares glaciares, Flujos piroclásticos", pop: "Valles agrícolas" },
+      { name: "Tutupaca", lat: -17.1636, lon: -70.0328, color: "#46f0f0", risk: "Alto", elev: "5815 m", last: "Holoceno", hazards: "Flujos de lava, Lahares", pop: "Frontera Perú-Chile" },
+      { name: "SaraSara", lat: -16.1997, lon: -70.6642, color: "#f032e6", risk: "Moderado", elev: "5505 m", last: "Pleistoceno-Holoceno", hazards: "Colapso de flancos, Lahares", pop: "Zona rural de Ayacucho" },
+      { name: "Yucamana", lat: -16.65, lon: -70.545, color: "#bcf60c", risk: "Moderado", elev: "5550 m", last: "Holoceno", hazards: "Flujos de lava, Caída de ceniza", pop: "Comunidades de Tacna" }
+    ];
+
+    const list = document.getElementById("volcanoList");
+    let active = null;
+
+    volcanoes.forEach(v => {
+      const div = document.createElement("div");
+      div.className = "volcano";
+      div.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><strong>${v.name}</strong><br><small>${v.elev}</small></div>
+          <span class="risk ${v.risk === 'Muy Alto' ? 'muy-alto' : v.risk === 'Alto' ? 'alto' : 'moderado'}">${v.risk}</span>
+        </div>
+        <div class="details" style="display:none;">
+          <p><b>Última actividad:</b> ${v.last}</p>
+          <p><b>Peligros:</b> ${v.hazards}</p>
+          <p><b>Población expuesta:</b> ${v.pop}</p>
+          <p>📍 ${v.lat.toFixed(4)}°, ${v.lon.toFixed(4)}°</p>
+        </div>
+      `;
+      div.addEventListener("click", () => {
+        if (active && active !== div) {
+          active.classList.remove("active");
+          active.querySelector(".details").style.display = "none";
+        }
+        const details = div.querySelector(".details");
+        const isActive = div.classList.toggle("active");
+        details.style.display = isActive ? "block" : "none";
+        active = isActive ? div : null;
+      });
+      list.appendChild(div);
+    });
+
+    // Mostrar/Ocultar panel
+    document.getElementById("toggleSidebar").addEventListener("click", () => {
+      const sidebar = document.getElementById("sidebar");
+      sidebar.style.display = sidebar.style.display === "none" ? "block" : "none";
+    });
+
+    // Abrir en GEE
+    document.getElementById("openGEE").addEventListener("click", () => {
+      window.open("https://e-caldron-473502-i8.projects.earthengine.app/view/versin-6-proto", "_blank");
+    });
+  </script>
+</body>
+</html>
